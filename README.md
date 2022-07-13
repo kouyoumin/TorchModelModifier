@@ -55,3 +55,5 @@ Change all 2d layers to specified dimension.
 - nn.LazyInstanceNorm1d
 - nn.LazyInstanceNorm2d
 - nn.LazyInstanceNorm3d
+### Limitations
+- Modifies nn.modules only, does not apply to nn.functional operations written in forward
