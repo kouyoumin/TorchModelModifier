@@ -41,12 +41,12 @@ def _modify_weight_dim(original, target_dim):
                     repeats = [1] * weight.ndim + [weight.shape[-1]]
                     weight = weight.unsqueeze(-1).repeat(*repeats)
                     
-                weight_correction_factor = w.shape[-1] ** original_dim / weight.shape[-1] ** target_dim
+                weight_correction_factor = weight.shape[-1] ** original_dim / weight.shape[-1] ** target_dim
                 print(weight_correction_factor)
                 weight = weight * weight_correction_factor
             elif num_diff_dim < 0:
                 for i in range(abs(num_diff_dim)):
-                    weight = weight.sum(dim=w.ndim-1, keepdim=True).squeeze(-1)
+                    weight = weight.sum(dim=weight.ndim-1, keepdim=True).squeeze(-1)
             new_sd[key] = weight
             print('Changed', key, 'from', original[key].shape, 'to', new_sd[key].shape)
         else:
