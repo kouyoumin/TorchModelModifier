@@ -18,12 +18,15 @@ def modify_classifier_out(model, out_channels=1, selected_channels=None):
                 for idx in reversed(range(len(m))):
                     if isinstance(m[idx], nn.modules.conv._ConvNd):
                         cls_class = m[idx].__class__(m[idx].in_channels, out_channels, m[idx].kernel_size, m[idx].stride, m[idx].padding, m[idx].dilation, m[idx].groups, False if m[idx].bias==None else True, m[idx].padding_mode)
-                        cls_class.load_state_dict(_modify_weight(m.state_dict(), out_channels, selected_channels))
+                        cls_class.load_state_dict(_modify_weight(m[idx].state_dict(), out_channels, selected_channels))
                         m[idx] = cls_class
+                        break
                     elif isinstance(m[idx], nn.Linear):
                         cls_class = m[idx].__class__(m[idx].in_features, out_channels, False if m[idx].bias==None else True)
-                        cls_class.load_state_dict(_modify_weight(m.state_dict(), out_channels, selected_channels))
+                        cls_class.load_state_dict(_modify_weight(m[idx].state_dict(), out_channels, selected_channels))
                         m[idx] = cls_class
+                        break
+                
             break
     
     for n, m in model.named_children():
