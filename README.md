@@ -1,6 +1,7 @@
 # TorchModelModifier
 Modify model input, output, and dimension.
 In addition to model architecture, weight is also recalculated to approximate original output.
+
 ---
 ## modify_model_in
 Finds first conv layer in the model and change in_channels as you need. Useful to convert a RGB model (in_channels=3) to grayscale model (in_channels=1).
