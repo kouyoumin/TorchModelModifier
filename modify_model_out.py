@@ -4,7 +4,7 @@ import torch.nn as nn
 
 def modify_classifier_out(model, out_channels=1, selected_channels=None):
     for n, m in model.named_children():
-        if n == 'fc' or n == 'classifier':
+        if n == 'fc' or n == 'classifier' or n == 'head' or n == 'heads':
             print('Found classifier (%s): %s' % (n, m))
             if isinstance(m, nn.modules.conv._ConvNd):
                 cls_class = m.__class__(m.in_channels, out_channels, m.kernel_size, m.stride, m.padding, m.dilation, m.groups, False if m.bias==None else True, m.padding_mode)
