@@ -18,6 +18,7 @@ Finds classifier in the model and change num_output as you need. Can alse extrac
 ---
 ## modify_model_dim
 Change all 2d layers to specified dimension.
+Set coreml_compatibility=True if you plan to use the model with CoreML. This enables custom 3D global pooling modules, as coremltools does not support adaptive_avg_pool3d or adaptive_max_pool3d.
 
 ### Supported layers:
 - nn.Conv1d
