@@ -19,6 +19,26 @@ instancenormnd = [None, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d]
 lazyinstancenormnd = [None, nn.LazyInstanceNorm1d, nn.LazyInstanceNorm2d, nn.LazyInstanceNorm3d]
 
 
+class AdaptiveAvgPool3d(nn.Module):
+    def __init__(self, output_size):
+        super(AdaptiveAvgPool3d, self).__init__()
+        if output_size != 1 and output_size != (1,1,1):
+            raise NotImplementedError('This AdaptiveAvgPool3d only supports output_size=1')
+
+    def forward(self, x):
+        return x.mean((-3,-2,-1), keepdim=True)
+
+
+class AdaptiveMaxPool3d(nn.Module):
+    def __init__(self, output_size):
+        super(AdaptiveMaxPool3d, self).__init__()
+        if output_size != 1 and output_size != (1,1,1):
+            raise NotImplementedError('This AdaptiveMaxPool3d only supports output_size=1')
+
+    def forward(self, x):
+        return x.max(-1, keepdim=True)[0].max(-2, keepdim=True)[0].max(-3, keepdim=True)[0]
+
+
 def _modify_tuple_dim(original, target_size):
     if not isinstance(original, int):
         if len(original) >= target_size:
@@ -54,7 +74,7 @@ def _modify_weight_dim(original, target_dim):
     return new_sd
 
 
-def modify_model_dim(model, new_dim):
+def modify_model_dim(model, new_dim, coreml_compatibility=False):
     assert(1 <= new_dim <= 3)
     for n, m in model.named_modules():
         if isinstance(m, nn.modules.conv._ConvTransposeNd):
@@ -138,7 +158,10 @@ def modify_model_dim(model, new_dim):
             output_size = _modify_tuple_dim(m.output_size, new_dim)
 
             # Assign new 
-            pool_class = adaptivemaxpoolnd[new_dim]
+            if coreml_compatibility and new_dim == 3 and (m.output_size == 1 or m.output_size == (1,1)):
+                pool_class = AdaptiveMaxPool3d
+            else:
+                pool_class = adaptivemaxpoolnd[new_dim]
             setattr(levels[-1], hiers[-1], pool_class(output_size, m.return_indices))
         elif isinstance(m, nn.modules.pooling._AdaptiveAvgPoolNd):
             print('Found pool layer (%s): %s' % (n, m))
@@ -149,8 +172,11 @@ def modify_model_dim(model, new_dim):
             
             output_size = _modify_tuple_dim(m.output_size, new_dim)
 
-            # Assign new 
-            pool_class = adaptiveavgpoolnd[new_dim]
+            # Assign new
+            if coreml_compatibility and new_dim == 3 and (m.output_size == 1 or m.output_size == (1,1)):
+                pool_class = AdaptiveAvgPool3d
+            else:
+                pool_class = adaptiveavgpoolnd[new_dim]
             setattr(levels[-1], hiers[-1], pool_class(output_size))
         elif isinstance(m, nn.modules.batchnorm._BatchNorm):
             print('Found batchnorm layer (%s): %s' % (n, m))
