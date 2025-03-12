@@ -20,6 +20,27 @@ lazyinstancenormnd = [None, nn.LazyInstanceNorm1d, nn.LazyInstanceNorm2d, nn.Laz
 
 
 class AdaptiveAvgPool3d(nn.Module):
+    """
+    Applies a 3D adaptive average pooling over an input signal composed of several input planes.
+
+    This module only supports output_size=1 or output_size=(1,1,1).
+
+    Args:
+        output_size (int or tuple): The target output size of the form D x H x W. Must be 1 or (1,1,1).
+
+    Raises:
+        NotImplementedError: If output_size is not 1 or (1,1,1).
+
+    Methods:
+        forward(x):
+            Applies the adaptive average pooling operation to the input tensor x.
+
+            Args:
+                x (Tensor): The input tensor of shape (N, C, D, H, W).
+
+            Returns:
+                Tensor: The output tensor of shape (N, C, 1, 1, 1) after applying adaptive average pooling.
+    """
     def __init__(self, output_size):
         super(AdaptiveAvgPool3d, self).__init__()
         if output_size != 1 and output_size != (1,1,1):
@@ -30,6 +51,26 @@ class AdaptiveAvgPool3d(nn.Module):
 
 
 class AdaptiveMaxPool3d(nn.Module):
+    """
+    A custom implementation of 3D adaptive max pooling layer that only supports output size of 1.
+
+    Args:
+        output_size (int or tuple): The target output size. Must be 1 or (1, 1, 1).
+
+    Raises:
+        NotImplementedError: If the output_size is not 1 or (1, 1, 1).
+
+    Methods:
+        forward(x):
+            Applies the adaptive max pooling operation to the input tensor `x`.
+
+            Args:
+                x (torch.Tensor): The input tensor of shape (N, C, D, H, W).
+
+            Returns:
+                torch.Tensor: The output tensor after applying adaptive max pooling, 
+                              with shape (N, C, 1, 1, 1).
+    """
     def __init__(self, output_size):
         super(AdaptiveMaxPool3d, self).__init__()
         if output_size != 1 and output_size != (1,1,1):
@@ -75,6 +116,19 @@ def _modify_weight_dim(original, target_dim):
 
 
 def modify_model_dim(model, new_dim, coreml_compatibility=False):
+    """
+    Modify the dimensions of the layers in a given PyTorch model to a new dimension.
+    Args:
+        model (torch.nn.Module): The PyTorch model to modify.
+        new_dim (int): The new dimension to modify the model layers to. Must be between 1 and 3.
+        coreml_compatibility (bool, optional): If True, ensures compatibility with CoreML for certain layers. Default is False.
+    Raises:
+        AssertionError: If new_dim is not between 1 and 3.
+    The function iterates through the layers of the model and modifies the dimensions of convolutional, pooling, 
+    batch normalization, and instance normalization layers to the specified new dimension. It handles both 
+    standard and lazy versions of these layers. For adaptive pooling layers, it ensures CoreML compatibility 
+    if specified.
+    """
     assert(1 <= new_dim <= 3)
     for n, m in model.named_modules():
         if isinstance(m, nn.modules.conv._ConvTransposeNd):
