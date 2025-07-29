@@ -18,6 +18,9 @@ lazybatchnormnd = [None, nn.LazyBatchNorm1d, nn.LazyBatchNorm2d, nn.LazyBatchNor
 instancenormnd = [None, nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d]
 lazyinstancenormnd = [None, nn.LazyInstanceNorm1d, nn.LazyInstanceNorm2d, nn.LazyInstanceNorm3d]
 
+dropoutnd = [None, nn.Dropout1d, nn.Dropout2d, nn.Dropout3d]
+
+linear_interpolation_modes = [None, 'linear', 'bilinear', 'trilinear']
 
 class AdaptiveAvgPool3d(nn.Module):
     """
@@ -131,13 +134,12 @@ def modify_model_dim(model, new_dim, coreml_compatibility=False):
     """
     assert(1 <= new_dim <= 3)
     for n, m in model.named_modules():
+        hiers = n.split('.')
+        levels = [model]
+        for hier in hiers[:-1]:
+            levels.append(getattr(levels[-1], hier))
+        #print('Processing layer (%s): %s' % (n, m))
         if isinstance(m, nn.modules.conv._ConvTransposeNd):
-            print('Found conv layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             kernel_size = _modify_tuple_dim(m.kernel_size, new_dim)
             stride = _modify_tuple_dim(m.stride, new_dim)
             padding = _modify_tuple_dim(m.padding, new_dim)
@@ -145,20 +147,16 @@ def modify_model_dim(model, new_dim, coreml_compatibility=False):
             
             # Assign new
             if isinstance(m, nn.modules.conv._LazyConvXdMixin):
-                conv_class = lazyconvtransposend[new_dim](m.out_channels, kernel_size, stride, padding, dilation, m.groups, False if m.bias==None else True, m.padding_mode)
-                conv_class.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
-                setattr(levels[-1], hiers[-1], conv_class)
+                conv_module = lazyconvtransposend[new_dim](m.out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation, groups=m.groups, bias=False if m.bias==None else True, padding_mode=m.padding_mode)
+                conv_module.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
+                print(f'Found convtransposend layer ({n}): {m} -> {conv_module}')
+                setattr(levels[-1], hiers[-1], conv_module)
             else:
-                conv_class = convtransposend[new_dim](m.in_channels, m.out_channels, kernel_size, stride, padding, dilation, m.groups, False if m.bias==None else True, m.padding_mode)
-                conv_class.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
-                setattr(levels[-1], hiers[-1], conv_class)
+                conv_module = convtransposend[new_dim](m.in_channels, m.out_channels, kernel_size, stride=stride, padding=padding, dilation=dilation, groups=m.groups, bias=False if m.bias==None else True, padding_mode=m.padding_mode)
+                conv_module.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
+                print(f'Found convtransposend layer ({n}): {m} -> {conv_module}')
+                setattr(levels[-1], hiers[-1], conv_module)
         elif isinstance(m, nn.modules.conv._ConvNd):
-            print('Found conv layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             kernel_size = _modify_tuple_dim(m.kernel_size, new_dim)
             stride = _modify_tuple_dim(m.stride, new_dim)
             padding = _modify_tuple_dim(m.padding, new_dim)
@@ -166,101 +164,88 @@ def modify_model_dim(model, new_dim, coreml_compatibility=False):
 
             # Assign new
             if isinstance(m, nn.modules.conv._LazyConvXdMixin):
-                conv_class = lazyconvnd[new_dim](m.out_channels, kernel_size, stride, padding, dilation, m.groups, False if m.bias==None else True, m.padding_mode)
-                conv_class.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
-                setattr(levels[-1], hiers[-1], conv_class)
+                conv_module = lazyconvnd[new_dim](m.out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, groups=m.groups, bias=False if m.bias==None else True, padding_mode=m.padding_mode)
+                conv_module.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
+                print(f'Found conv layer ({n}): {m} -> {conv_module}')
+                setattr(levels[-1], hiers[-1], conv_module)
             else:
-                conv_class = convnd[new_dim](m.in_channels, m.out_channels, kernel_size, stride, padding, dilation, m.groups, False if m.bias==None else True, m.padding_mode)
-                conv_class.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
-                setattr(levels[-1], hiers[-1], conv_class)
+                conv_module = convnd[new_dim](m.in_channels, m.out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, groups=m.groups, bias=False if m.bias==None else True, padding_mode=m.padding_mode)
+                conv_module.load_state_dict(_modify_weight_dim(m.state_dict(), new_dim))
+                print(f'Found conv layer ({n}): {m} -> {conv_module}')
+                setattr(levels[-1], hiers[-1], conv_module)
         elif isinstance(m, nn.modules.pooling._MaxPoolNd):
-            print('Found pool layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             kernel_size = _modify_tuple_dim(m.kernel_size, new_dim)
             stride = _modify_tuple_dim(m.stride, new_dim)
             padding = _modify_tuple_dim(m.padding, new_dim)
             dilation = _modify_tuple_dim(m.dilation, new_dim)
 
             # Assign new 
-            pool_class = maxpoolnd[new_dim]
-            setattr(levels[-1], hiers[-1], pool_class(kernel_size, stride, padding, dilation, m.return_indices, m.ceil_mode))
+            pool_module = maxpoolnd[new_dim](kernel_size, stride=stride, padding=padding, dilation=dilation, return_indices=m.return_indices, ceil_mode=m.ceil_mode)
+            print(f'Found maxpool layer ({n}): {m} -> {pool_module}')
+            setattr(levels[-1], hiers[-1], pool_module)
         elif isinstance(m, nn.modules.pooling._AvgPoolNd):
-            print('Found pool layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             kernel_size = _modify_tuple_dim(m.kernel_size, new_dim)
             stride = _modify_tuple_dim(m.stride, new_dim)
             padding = _modify_tuple_dim(m.padding, new_dim)
 
             # Assign new 
-            pool_class = avgpoolnd[new_dim]
-            setattr(levels[-1], hiers[-1], pool_class(kernel_size, stride, padding, m.ceil_mode, m.count_include_pad))
+            pool_module = avgpoolnd[new_dim](kernel_size, stride=stride, padding=padding, ceil_mode=m.ceil_mode, count_include_pad=m.count_include_pad)
+            print(f'Found avgpool layer ({n}): {m} -> {pool_module}')
+            setattr(levels[-1], hiers[-1], pool_module)
         elif isinstance(m, nn.modules.pooling._AdaptiveMaxPoolNd):
-            print('Found pool layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             output_size = _modify_tuple_dim(m.output_size, new_dim)
 
             # Assign new 
             if coreml_compatibility and new_dim == 3 and (m.output_size == 1 or m.output_size == (1,1)):
-                pool_class = AdaptiveMaxPool3d
+                pool_module = AdaptiveMaxPool3d(output_size, return_indices=m.return_indices)
             else:
-                pool_class = adaptivemaxpoolnd[new_dim]
-            setattr(levels[-1], hiers[-1], pool_class(output_size, m.return_indices))
+                pool_module = adaptivemaxpoolnd[new_dim](output_size, return_indices=m.return_indices)
+            print(f'Found adaptivemaxpool layer ({n}): {m} -> {pool_module}')
+            setattr(levels[-1], hiers[-1], pool_module)
         elif isinstance(m, nn.modules.pooling._AdaptiveAvgPoolNd):
-            print('Found pool layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             output_size = _modify_tuple_dim(m.output_size, new_dim)
 
             # Assign new
             if coreml_compatibility and new_dim == 3 and (m.output_size == 1 or m.output_size == (1,1)):
-                pool_class = AdaptiveAvgPool3d
+                pool_module = AdaptiveAvgPool3d(output_size)
             else:
-                pool_class = adaptiveavgpoolnd[new_dim]
-            setattr(levels[-1], hiers[-1], pool_class(output_size))
+                pool_module = adaptiveavgpoolnd[new_dim](output_size)
+            print(f'Found adaptiveavgpool layer ({n}): {m} -> {pool_module}')
+            setattr(levels[-1], hiers[-1], pool_module)
         elif isinstance(m, nn.modules.batchnorm._BatchNorm):
-            print('Found batchnorm layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             # Assign new 
             if isinstance(m, nn.modules.batchnorm._LazyNormBase):
-                norm_class = lazybatchnormnd[new_dim]
-                setattr(levels[-1], hiers[-1], norm_class(m.eps, m.momentum, m.affine, m.track_running_stats))
+                norm_module = lazybatchnormnd[new_dim](eps=m.eps, momentum=m.momentum, affine=m.affine, track_running_stats=m.track_running_stats)
+                print(f'Found batchnorm layer ({n}): {m} -> {norm_module}')
+                setattr(levels[-1], hiers[-1], norm_module)
             else:
-                norm_class = batchnormnd[new_dim]
-                setattr(levels[-1], hiers[-1], norm_class(m.num_features, m.eps, m.momentum, m.affine, m.track_running_stats))
+                norm_module = batchnormnd[new_dim](m.num_features, eps=m.eps, momentum=m.momentum, affine=m.affine, track_running_stats=m.track_running_stats)
+                print(f'Found batchnorm layer ({n}): {m} -> {norm_module}')
+                setattr(levels[-1], hiers[-1], norm_module)
         elif isinstance(m, nn.modules.instancenorm._InstanceNorm):
-            print('Found instancenorm layer (%s): %s' % (n, m))
-            hiers = n.split('.')
-            levels = [model]
-            for hier in hiers[:-1]:
-                levels.append(getattr(levels[-1], hier))
-            
             # Assign new 
             if isinstance(m, nn.modules.batchnorm._LazyNormBase):
-                norm_class = lazyinstancenormnd[new_dim]
-                setattr(levels[-1], hiers[-1], norm_class(m.eps, m.momentum, m.affine, m.track_running_stats))
+                norm_module = lazyinstancenormnd[new_dim](eps=m.eps, momentum=m.momentum, affine=m.affine, track_running_stats=m.track_running_stats)
+                print(f'Found instancenorm layer ({n}): {m} -> {norm_module}')
+                setattr(levels[-1], hiers[-1], norm_module)
             else:
-                norm_class = instancenormnd[new_dim]
-                setattr(levels[-1], hiers[-1], norm_class(m.num_features, m.eps, m.momentum, m.affine, m.track_running_stats))
-
+                norm_module = instancenormnd[new_dim](m.num_features, eps=m.eps, momentum=m.momentum, affine=m.affine, track_running_stats=m.track_running_stats)
+                print(f'Found instancenorm layer ({n}): {m} -> {norm_module}')
+                setattr(levels[-1], hiers[-1], norm_module)
+        elif isinstance(m, nn.modules.upsampling.Upsample) and 1 <= new_dim <= 3:
+            if m.mode.endswith('linear'):
+                upsample_module = nn.Upsample(scale_factor=m.scale_factor, mode=linear_interpolation_modes[new_dim], align_corners=m.align_corners)
+                print(f'Found upsample layer ({n}): {m} -> {upsample_module}')
+                setattr(levels[-1], hiers[-1], upsample_module)
+        elif isinstance(m, nn.modules.dropout._DropoutNd):# and not isinstance(m, nn.modules.dropout.Dropout):
+            if isinstance(m, nn.modules.dropout.Dropout):
+                print(f'Found dropout layer ({n}): {m} - no change')
+                continue
+            
+            # Assign new 
+            dropout_module = dropoutnd[new_dim](p=m.p, inplace=m.inplace)
+            print(f'Found dropout layer ({n}): {m} -> {dropout_module}')
+            setattr(levels[-1], hiers[-1], dropout_module)
 
 
 def test(model_str, new_dim):
